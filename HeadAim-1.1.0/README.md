@@ -19,14 +19,25 @@ Client-side utility that smoothly turns the player's camera toward the eye/head 
 - Uses proportional, capped yaw/pitch movement instead of an instant rotation.
 - Does not attack, click, send custom packets, or modify server-side combat logic.
 
+## Configuration
+
+On the first launch, Head Aim creates `config/headaim.properties` in the Minecraft game directory. Edit the file and restart the game to change:
+
+- `range`: maximum targeting distance, from 1 to 64 blocks.
+- `fov_degrees`: total aiming cone field of view, from 1 to 360 degrees.
+- `yaw_response` and `pitch_response`: rotation response per tick, from 0.01 to 1.
+- `max_yaw_step` and `max_pitch_step`: maximum rotation step per tick, from 0.1 to 45 degrees.
+
+Invalid settings are logged and replaced with their defaults.
+
 ## Build
 
-This project uses Fabric Loom 1.8.13 and Java 21. A Gradle installation capable of running the project is required because the supplied archive does not include a Gradle wrapper binary.
+This project uses Fabric Loom 1.8.13 and Java 21.
 
-Run:
+Run the build with the Gradle wrapper (use `gradlew.bat build` on Windows):
 
 ```text
-gradle build
+bash ./gradlew build
 ```
 
 The remapped mod jar will be placed in `build/libs/`.
