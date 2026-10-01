@@ -16,24 +16,17 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+
 /**
  * Smoothly turns the player's camera toward the head/eye point of a nearby living mob.
  *
  * Fabric 1.21.1 / Yarn 1.21.1+build.3.
  */
 public final class HeadAimClient implements ClientModInitializer {
-    private static final double RANGE = 20.0D;
-    private static final double RANGE_SQUARED = RANGE * RANGE;
-
-    // 180 degrees means a 90-degree half-cone in front of the player.
-    private static final float FOV_DEGREES = 180.0F;
-
-    // The camera does not jump straight to the target. The step is proportional
-    // to the remaining angle and is capped so large turns are still gradual.
-    private static final float YAW_RESPONSE = 0.31F;
-    private static final float PITCH_RESPONSE = 0.27F;
-    private static final float MAX_YAW_STEP = 9.0F;
-    private static final float MAX_PITCH_STEP = 7.0F;
+    private static final AimConfig CONFIG = AimConfig.load();
     private static final float MIN_YAW_STEP = 0.20F;
     private static final float MIN_PITCH_STEP = 0.16F;
 
@@ -92,22 +85,21 @@ public final class HeadAimClient implements ClientModInitializer {
 
     private static LivingEntity findNearestTarget(MinecraftClient client) {
         PlayerEntity player = client.player;
-        Box searchBox = player.getBoundingBox().expand(RANGE);
-
-        LivingEntity nearest = null;
-        double nearestDistanceSquared = Double.MAX_VALUE;
-
-        for (LivingEntity entity : client.world.getEntitiesByClass(
+        Box searchBox = player.getBoundingBox().expand(CONFIG.range());
+        List<LivingEntity> candidates = new ArrayList<>(client.world.getEntitiesByClass(
                 LivingEntity.class,
                 searchBox,
                 candidate -> candidate != player
                         && !(candidate instanceof PlayerEntity)
                         && candidate.isAlive()
                         && !candidate.isSpectator()
-        )) {
+        ));
+        candidates.sort(Comparator.comparingDouble(candidate -> player.squaredDistanceTo(candidate)));
+
+        for (LivingEntity entity : candidates) {
             double distanceSquared = player.squaredDistanceTo(entity);
-            if (distanceSquared > RANGE_SQUARED || distanceSquared >= nearestDistanceSquared) {
-                continue;
+            if (distanceSquared > CONFIG.rangeSquared()) {
+                break;
             }
 
             Vec3d head = entity.getEyePos();
@@ -119,21 +111,20 @@ public final class HeadAimClient implements ClientModInitializer {
                 continue;
             }
 
-            nearest = entity;
-            nearestDistanceSquared = distanceSquared;
+            return entity;
         }
 
-        return nearest;
+        return null;
     }
 
     private static boolean isValidTarget(MinecraftClient client, LivingEntity target) {
-        if (target == null || !target.isAlive() || target.isRemoved()) {
+        if (target == null || target.getWorld() != client.world || !target.isAlive() || target.isRemoved()) {
             return false;
         }
         if (target == client.player || target instanceof PlayerEntity || target.isSpectator()) {
             return false;
         }
-        if (client.player.squaredDistanceTo(target) > RANGE_SQUARED) {
+        if (client.player.squaredDistanceTo(target) > CONFIG.rangeSquared()) {
             return false;
         }
 
@@ -143,21 +134,11 @@ public final class HeadAimClient implements ClientModInitializer {
 
     private static boolean isInsideFov(PlayerEntity player, Vec3d targetPoint) {
         Vec3d from = player.getCameraPosVec(1.0F);
-        Vec3d toTarget = targetPoint.subtract(from);
-        double lengthSquared = toTarget.lengthSquared();
-        if (lengthSquared < 1.0E-8D) {
-            return true;
-        }
-
-        Vec3d look = player.getRotationVec(1.0F);
-        double dot = MathHelper.clamp(
-                look.dotProduct(toTarget.normalize()),
-                -1.0D,
-                1.0D
+        return AimMath.isDirectionInsideFov(
+                player.getRotationVec(1.0F),
+                targetPoint.subtract(from),
+                CONFIG.fovCosine()
         );
-
-        double angleDegrees = Math.toDegrees(Math.acos(dot));
-        return angleDegrees <= FOV_DEGREES * 0.5D;
     }
 
     private static boolean hasLineOfSight(MinecraftClient client, PlayerEntity player, Vec3d targetPoint) {
@@ -189,8 +170,8 @@ public final class HeadAimClient implements ClientModInitializer {
 
         float pitchError = targetPitch - player.getPitch();
 
-        float yawStep = smoothStep(yawError, YAW_RESPONSE, MIN_YAW_STEP, MAX_YAW_STEP);
-        float pitchStep = smoothStep(pitchError, PITCH_RESPONSE, MIN_PITCH_STEP, MAX_PITCH_STEP);
+        float yawStep = smoothStep(yawError, CONFIG.yawResponse(), MIN_YAW_STEP, CONFIG.maxYawStep());
+        float pitchStep = smoothStep(pitchError, CONFIG.pitchResponse(), MIN_PITCH_STEP, CONFIG.maxPitchStep());
 
         float newYaw = player.getYaw() + yawStep;
         float newPitch = MathHelper.clamp(player.getPitch() + pitchStep, -90.0F, 90.0F);
