@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "headaim",
+  "version": "${version}",
+  "name": "Head Aim",
+  "description": "Client-side smooth head targeting for living mobs in Minecraft 1.21.1.",
+  "authors": ["dangkhoilkb17"],
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.dangkhoilkb17.headaim.HeadAimClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.5",
+    "minecraft": "1.21.1",
+    "fabric-api": "*"
+  }
+}
